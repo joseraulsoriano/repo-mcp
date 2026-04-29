@@ -4,7 +4,7 @@ Monorepo con servidores y clientes relacionados con MCP (herramientas HTTP para 
 
 Licencia: ver [LICENSE](LICENSE) (MIT).
 
-Plantilla de despliegue (URLs, riesgos): [MCP_PUBLICATION_STATUS.md](MCP_PUBLICATION_STATUS.md). Tags y releases: [RELEASING.md](RELEASING.md). Seguridad y fork: [SECURITY.md](SECURITY.md).
+Plantilla de despliegue (URLs, riesgos): [MCP_PUBLICATION_STATUS.md](MCP_PUBLICATION_STATUS.md). Tags y releases: [RELEASING.md](RELEASING.md). Seguridad y fork: [SECURITY.md](SECURITY.md). Historial Git de subrepos antes del monorepo: [docs/RECUPERAR_HISTORIAL_SUBREPOS.md](docs/RECUPERAR_HISTORIAL_SUBREPOS.md).
 
 ## Estado orientado a publicación
 
