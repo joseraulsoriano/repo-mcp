@@ -1,0 +1,14 @@
+{
+  "name": "recetario-mx-backend-alexa",
+  "version": "1.0.0",
+  "description": "Backend minimo Node.js para la skill Alexa Recetario MX (POST /api/mcp/recipes)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "test": "node scripts/test-api.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

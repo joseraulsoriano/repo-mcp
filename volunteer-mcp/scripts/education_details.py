@@ -1,0 +1,174 @@
+#!/usr/bin/env python3
+import os
+import re
+import json
+import asyncio
+from typing import Any, Dict, List, Optional, Tuple
+
+import aiohttp
+from bs4 import BeautifulSoup
+
+
+def read_enriched(path: str) -> List[Dict[str, Any]]:
+    with open(path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    if isinstance(data, list):
+        return data
+    return []
+
+
+def normalize_money_values(text: str) -> List[float]:
+    t = text.lower().replace("\u00a0", " ")
+    if any(k in t for k in ["gratuit", "sin costo", "sin cuota", "cuota simb" ]):
+        return [0.0]
+    # Buscar patrones tipo $12,345.67 o 12,345 MXN
+    vals: List[float] = []
+    for m in re.finditer(r"(?:\$\s*)?([0-9]{2,3}(?:[\.,][0-9]{3})*(?:[\.,][0-9]{2})?|[0-9]{3,6})\s*(?:mxn|m\.?n\.?|pesos)?", t, flags=re.I):
+        raw = m.group(1)
+        raw = raw.replace(".", "").replace(",", ".") if raw.count(",") == 1 and raw.count(".") >= 1 else raw.replace(",", "")
+        try:
+            vals.append(float(raw))
+        except Exception:
+            continue
+    # filtrar outliers absurdos (> 1e7)
+    vals = [v for v in vals if v < 1e7]
+    return vals
+
+
+def extract_careers_from_html(html: str) -> List[str]:
+    try:
+        soup = BeautifulSoup(html, "lxml")
+    except Exception:
+        return []
+    texts: List[str] = []
+    # candidates in anchors and list items
+    for sel in ["a", "li", "h2", "h3", "p"]:
+        for el in soup.select(sel):
+            txt = el.get_text(" ", strip=True)
+            if not txt or len(txt) < 3:
+                continue
+            texts.append(txt)
+    patterns = [
+        r"^licenciatura\s+en\s+.+$",
+        r"^ingenier[ií]a\s+.*$",
+        r"^arquitectura$",
+        r"^psicolog[íi]a$",
+        r"^derecho$",
+        r"^medicina$",
+        r"^administraci[oó]n(\s+de\s+empresas)?$",
+        r"^contadur[ií]a$",
+        r"^econom[ií]a$",
+        r"^mercadotecnia$",
+        r"^relaciones\s+internacionales$",
+        r"^biolog[ií]a$",
+        r"^qu[ií]mica$",
+        r"^f[ií]sica$",
+        r"^matem[áa]ticas$",
+        r"^comunicaci[oó]n$",
+        r"^dise[ñn]o(\s+industrial|\s+gr[aá]fico)?$",
+    ]
+    careers: List[str] = []
+    seen = set()
+    for txt in texts:
+        low = txt.lower()
+        # Simple heuristics
+        if any(k in low for k in ["licenciatura en", "ingenier", "arquitectura", "psicolog", "derecho", "medicina", "administraci", "contadur", "econom", "mercadotec", "relaciones internacionales", "biolog", "quim", "fisi", "matem", "comunicaci", "diseñ", "diseno"]):
+            # Clean common prefixes/suffixes
+            cleaned = re.sub(r"\s+\|.*$", "", txt).strip()
+            if cleaned.lower() not in seen and 3 <= len(cleaned) <= 120:
+                careers.append(cleaned)
+                seen.add(cleaned.lower())
+    # fallback: regex precise matches
+    if not careers:
+        for p in patterns:
+            rx = re.compile(p, flags=re.I)
+            for s in texts:
+                if rx.match(s) and s.lower() not in seen:
+                    careers.append(s)
+                    seen.add(s.lower())
+    # trim and dedupe
+    careers = careers[:50]
+    return careers
+
+
+async def fetch_text(session: aiohttp.ClientSession, url: str, timeout: int = 15) -> str:
+    try:
+        async with session.get(url, timeout=timeout) as r:
+            if r.status != 200:
+                return ""
+            return await r.text()
+    except Exception:
+        return ""
+
+
+async def enrich_details(item: Dict[str, Any]) -> Dict[str, Any]:
+    tuition_url = item.get("tuition_url")
+    careers_url = item.get("careers_url")
+    curricula_url = item.get("curricula_url")
+    costo_value: Optional[float] = None
+    carreras_list: List[str] = []
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X) AppleWebKit/537.36 (KHTML, like Gecko) Chrome Safari",
+        "Accept-Language": "es-MX,es;q=0.9,en;q=0.8",
+    }
+    async with aiohttp.ClientSession(headers=headers) as session:
+        if tuition_url:
+            html = await fetch_text(session, tuition_url)
+            vals = normalize_money_values(html)
+            if vals:
+                # escoger valor representativo (mediana aproximada)
+                vals_sorted = sorted(vals)
+                costo_value = vals_sorted[len(vals_sorted)//2]
+        if careers_url:
+            html = await fetch_text(session, careers_url)
+            if html:
+                carreras_list = extract_careers_from_html(html)
+
+    nombre = item.get("name") or item.get("nombre") or ""
+    pos = item.get("position") or {}
+    ubicacion = []
+    if isinstance(pos, dict) and ("lat" in pos and "lng" in pos):
+        ubicacion = [{"lat": pos.get("lat"), "lng": pos.get("lng") }]
+
+    return {
+        "nombre": nombre,
+        "ubicacion": ubicacion,
+        "carreras": carreras_list,
+        "costo": costo_value if costo_value is not None else 0.0 if tuition_url and isinstance(costo_value, (int, float)) else (costo_value if costo_value is not None else None),
+        "type": item.get("type")
+    }
+
+
+async def main_async(input_path: str, out_path: str, max_unis: int) -> int:
+    enriched = read_enriched(input_path)
+    selected = enriched[:max_unis]
+    results: List[Dict[str, Any]] = []
+    for uni in selected:
+        try:
+            det = await enrich_details(uni)
+            results.append(det)
+        except Exception:
+            continue
+    os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
+    with open(out_path, "w", encoding="utf-8") as f:
+        json.dump(results, f, ensure_ascii=False, indent=2)
+    print(out_path)
+    return 0
+
+
+def main() -> None:
+    import argparse
+    p = argparse.ArgumentParser(description="Extrae costos y carreras desde URLs enriquecidas")
+    p.add_argument("--in", dest="input_path", default="data/edu_enriched.json")
+    p.add_argument("--out", dest="out_path", default="data/edu_details.json")
+    p.add_argument("--max", dest="max_unis", type=int, default=10)
+    args = p.parse_args()
+    code = asyncio.run(main_async(args.input_path, args.out_path, args.max_unis))
+    raise SystemExit(code)
+
+
+if __name__ == "__main__":
+    main()
+
+

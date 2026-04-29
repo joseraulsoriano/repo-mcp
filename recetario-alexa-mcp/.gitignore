@@ -1,0 +1,33 @@
+# Env y claves - no subir
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Node (backend-alexa)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# Python (recetario-mcp)
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Misc
+.DS_Store
+*.pem
+.vercel

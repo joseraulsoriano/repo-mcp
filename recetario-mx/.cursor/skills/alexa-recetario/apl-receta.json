@@ -1,0 +1,56 @@
+{
+  "type": "APL",
+  "version": "2023.1",
+  "mainTemplate": {
+    "parameters": ["payload"],
+    "item": {
+      "type": "Container",
+      "direction": "column",
+      "paddingLeft": 24,
+      "paddingRight": 24,
+      "paddingTop": 24,
+      "paddingBottom": 24,
+      "items": [
+        {
+          "type": "Text",
+          "text": "${payload.recipeName}",
+          "fontSize": 28,
+          "fontWeight": "bold",
+          "color": "#ea580c"
+        },
+        {
+          "type": "Text",
+          "text": "${payload.description}",
+          "fontSize": 16,
+          "color": "#374151",
+          "wrap": true,
+          "paddingTop": 12
+        },
+        {
+          "type": "Text",
+          "text": "Ingredientes",
+          "fontSize": 18,
+          "fontWeight": "bold",
+          "color": "#ea580c",
+          "paddingTop": 16
+        },
+        {
+          "type": "Text",
+          "text": "${payload.ingredientsText}",
+          "fontSize": 14,
+          "color": "#4b5563",
+          "wrap": true,
+          "paddingTop": 4
+        },
+        {
+          "type": "Text",
+          "text": "Costo aprox: $${payload.cost} MXN",
+          "fontSize": 14,
+          "fontWeight": "bold",
+          "color": "#059669",
+          "paddingTop": 12
+        }
+      ]
+    }
+  }
+}
