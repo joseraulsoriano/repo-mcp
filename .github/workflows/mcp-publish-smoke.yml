@@ -1,0 +1,59 @@
+# Smoke tests para servidores MCP HTTP (Docker + health + /tools).
+name: MCP publish smoke
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  volunteer-mcp:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build and start volunteer-mcp
+        working-directory: volunteer-mcp
+        run: |
+          docker compose build
+          docker compose up -d
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:8011/health >/dev/null; then break; fi
+            sleep 1
+          done
+
+      - name: Smoke /health and /tools
+        run: |
+          curl -sf http://127.0.0.1:8011/health
+          curl -sf http://127.0.0.1:8011/tools | grep -q volunteer.search
+
+      - name: Stop stack
+        if: always()
+        working-directory: volunteer-mcp
+        run: docker compose down -v
+
+  recetario-mcp:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build and start recetario-mcp
+        working-directory: recetario-mcp
+        run: |
+          docker compose build
+          docker compose up -d
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:8012/health >/dev/null; then break; fi
+            sleep 1
+          done
+
+      - name: Smoke /health and /tools
+        run: |
+          curl -sf http://127.0.0.1:8012/health
+          curl -sf http://127.0.0.1:8012/tools | grep -q recetario.recipes_search
+
+      - name: Stop stack
+        if: always()
+        working-directory: recetario-mcp
+        run: docker compose down -v

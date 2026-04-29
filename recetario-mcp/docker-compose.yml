@@ -1,0 +1,14 @@
+# Recetario MCP - levantar con: docker compose up --build
+services:
+  recetario-mcp:
+    build: .
+    ports:
+      - "8012:8012"
+    environment:
+      # Brave Search API (obligatorio para busquedas)
+      - BRAVE_API_KEY=${BRAVE_API_KEY:-}
+      - BRAVE_MAX_RPS=${BRAVE_MAX_RPS:-0.8}
+      - BRAVE_MONTHLY_QUOTA=${BRAVE_MONTHLY_QUOTA:-2000}
+      # Opcional: cuota distribuida
+      # - REDIS_URL=redis://redis:6379
+    restart: unless-stopped
