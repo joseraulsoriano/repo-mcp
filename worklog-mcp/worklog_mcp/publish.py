@@ -5,8 +5,11 @@ día y se empuja a `POST {url}/api/bitacora/dias` con `Authorization: Bearer {to
 
 Configuración (lo primero que exista gana):
 - `WORKLOG_PANEL_URL` y `WORKLOG_PANEL_TOKEN` en el entorno.
-- `~/.worklog/panel.json` con `{"url": "...", "token": "..."}`. Lo usa el hook `SessionEnd`,
-  que no siempre hereda el entorno de la terminal.
+- `~/.worklog/panel.json` con `{"url": "..."}`. Lo usa el hook `SessionEnd`, que no siempre
+  hereda el entorno de la terminal.
+- El token, mejor en el Llavero de macOS que en el JSON: servicio `worklog-panel`
+  (`security add-generic-password -s worklog-panel -a "$USER" -w`). Así no queda en texto plano
+  en ningún archivo. El JSON acepta `"token"` por compatibilidad, pero el Llavero gana.
 
 Qué no sale de la máquina: los comandos de shell (pueden llevar secretos) y las instrucciones
 completas; de cada sesión viaja sólo la primera, recortada.
@@ -16,6 +19,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import urllib.error
 import urllib.request
 from datetime import date
@@ -28,10 +32,23 @@ ENDPOINT = "/api/bitacora/dias"
 LOTE = 30
 
 
+KEYCHAIN_SERVICE = "worklog-panel"
+
+
+def keychain_token(service: str = KEYCHAIN_SERVICE) -> str:
+    """El token guardado en el Llavero de macOS, o "" si no hay (o no es macOS)."""
+    try:
+        out = subprocess.run(["security", "find-generic-password", "-s", service, "-w"],
+                             capture_output=True, text=True, timeout=5)
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+    return out.stdout.strip() if out.returncode == 0 else ""
+
+
 def config(home: Path | None = None) -> tuple[str, str] | None:
     """(url, token) o None si la publicación no está configurada."""
     url = os.environ.get("WORKLOG_PANEL_URL", "").strip()
-    token = os.environ.get("WORKLOG_PANEL_TOKEN", "").strip()
+    token = os.environ.get("WORKLOG_PANEL_TOKEN", "").strip() or keychain_token()
     if not (url and token):
         path = (home or store.DATA_DIR) / "panel.json"
         try:

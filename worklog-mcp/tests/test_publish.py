@@ -14,6 +14,7 @@ def _sin_panel(monkeypatch):
     # Que la configuración real de la máquina nunca mande nada desde los tests.
     monkeypatch.delenv("WORKLOG_PANEL_URL", raising=False)
     monkeypatch.delenv("WORKLOG_PANEL_TOKEN", raising=False)
+    monkeypatch.setattr(publish, "keychain_token", lambda service=publish.KEYCHAIN_SERVICE: "")
 
 
 def _dia_demo(tmp_path):
@@ -46,6 +47,9 @@ def test_config_env_wins_over_file(tmp_path, monkeypatch):
     assert publish.config(tmp_path) is None
     (tmp_path / "panel.json").write_text(json.dumps({"url": "https://a.mx/", "token": "t1"}))
     assert publish.config(tmp_path) == ("https://a.mx", "t1")
+    # El Llavero gana sobre el token del JSON: así el archivo sólo necesita la URL.
+    monkeypatch.setattr(publish, "keychain_token", lambda service=publish.KEYCHAIN_SERVICE: "llavero")
+    assert publish.config(tmp_path) == ("https://a.mx", "llavero")
     monkeypatch.setenv("WORKLOG_PANEL_URL", "http://localhost:4321")
     monkeypatch.setenv("WORKLOG_PANEL_TOKEN", "t2")
     assert publish.config(tmp_path) == ("http://localhost:4321", "t2")

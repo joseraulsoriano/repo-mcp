@@ -65,7 +65,15 @@ export WORKLOG_PANEL_TOKEN=...                      # el mismo valor que BITACOR
 uv run worklog publish --since=-30d                 # el = es necesario con fechas negativas
 ```
 
-O en `~/.worklog/panel.json` (`{"url": "...", "token": "..."}`), que es lo que lee el hook. Con
+O, para que el token no quede en texto plano en ningún archivo, en el Llavero de macOS y sólo la
+URL en `~/.worklog/panel.json` (que es lo que lee el hook):
+
+```bash
+security add-generic-password -s worklog-panel -a "$USER" -w   # pide el token sin mostrarlo
+echo '{"url": "https://rtcsoluciones.mx"}' > ~/.worklog/panel.json
+```
+
+El JSON también acepta `"token"`, pero el Llavero gana si existen los dos. Con
 eso configurado, `snapshot` publica también hoy y ayer al cerrar cada sesión. Desde Claude Code:
 herramienta `worklog_publish`. Reenviar es seguro: cada día reemplaza al anterior.
 
