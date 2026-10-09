@@ -15,6 +15,7 @@ Plantilla de despliegue (URLs, riesgos): [MCP_PUBLICATION_STATUS.md](MCP_PUBLICA
 | [recetario-alexa-mcp/](recetario-alexa-mcp/) | `recetario-mcp` + `backend-alexa` (Node) | Dos servicios enlazados (`MCP_BASE_URL`, `MCP_API_KEY`) | Ver README del bundle. |
 | [recetario-mx/](recetario-mx/) | App Next.js (consume `api/mcp/*`) | Producto web, no catálogo MCP | DB, NextAuth, claves propias. Integración: `src/app/api/mcp/*`, `src/utils/mcp.ts`, `MCPRunner`, `MCPShoppingOptimizer`. |
 | [Kronos/](Kronos/) | API FastAPI (asistencia moto) | API de producto | Ver [Kronos/docs/PUBLICACION_MCP.md](Kronos/docs/PUBLICACION_MCP.md): no MCP catalogable hoy. |
+| [worklog-mcp/](worklog-mcp/) | Servidor MCP stdio: bitácora de trabajo desde Claude Code + git | Herramienta local (`claude mcp add`) | Datos en `~/.worklog/`, nunca en el repo. |
 
 CI: [.github/workflows/mcp-publish-smoke.yml](.github/workflows/mcp-publish-smoke.yml) construye y prueba `GET /health` y `GET /tools` en **volunteer-mcp** y **recetario-mcp**.
 
@@ -27,6 +28,7 @@ mcp/
 ├── recetario-alexa-mcp/
 ├── recetario-mx/
 ├── Kronos/
+├── worklog-mcp/            # MCP stdio local (bitácora)
 ├── LICENSE
 ├── RELEASING.md
 ├── MCP_PUBLICATION_STATUS.md
