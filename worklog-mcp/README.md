@@ -14,7 +14,7 @@ Pensado como evidencia de trabajo: un "Jira personal" que se lee en dos minutos.
 3. Cruza con `git log --all` de cada repo donde hubo sesiones.
 4. Genera Markdown por **día → proyecto → sesión**.
 
-Los datos nunca salen de la máquina. La base y los reportes viven fuera del repo (`~/.worklog/`).
+Los datos no salen de la máquina salvo que configures `worklog publish` (ver abajo). La base y los reportes viven fuera del repo (`~/.worklog/`).
 
 **Horas activas** = suma de los intervalos entre eventos de la sesión separados por ≤ 15 min.
 Si hay varias sesiones en paralelo, el tiempo se cuenta una sola vez. Incluye el tiempo en que el
@@ -52,6 +52,25 @@ uv run worklog add postura "No migrar a GraphQL" --body "REST cubre los casos" -
 uv run worklog sync --since 2026-10-01
 uv run worklog snapshot   # escribe ~/.worklog/hoy.md, semana.md y semanas/<lunes>.md
 ```
+
+## Panel en RTC Soluciones (`/admin/bitacora`)
+
+`worklog publish` manda un resumen por día al panel, que lo analiza contra metas (horas por día,
+sesiones con entregable, foco, ramas fuera de main/test, días sin registro). Es la única vía por
+la que algo sale de la máquina, y sólo si lo configuras:
+
+```bash
+export WORKLOG_PANEL_URL=https://rtcsoluciones.mx   # o http://localhost:4321
+export WORKLOG_PANEL_TOKEN=...                      # el mismo valor que BITACORA_TOKEN del panel
+uv run worklog publish --since=-30d                 # el = es necesario con fechas negativas
+```
+
+O en `~/.worklog/panel.json` (`{"url": "...", "token": "..."}`), que es lo que lee el hook. Con
+eso configurado, `snapshot` publica también hoy y ayer al cerrar cada sesión. Desde Claude Code:
+herramienta `worklog_publish`. Reenviar es seguro: cada día reemplaza al anterior.
+
+No viajan los comandos de shell ni las instrucciones completas (sólo la primera de cada sesión,
+recortada a 300 caracteres).
 
 ## Automático al cerrar sesión
 

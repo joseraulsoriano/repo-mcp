@@ -90,6 +90,8 @@ def test_snapshot_writes_files_and_never_raises(tmp_path, monkeypatch):
     from worklog_mcp import cli
 
     monkeypatch.setattr(store, "PROJECTS_DIR", tmp_path / "projects")
+    monkeypatch.delenv("WORKLOG_PANEL_URL", raising=False)
+    monkeypatch.delenv("WORKLOG_PANEL_TOKEN", raising=False)
     (tmp_path / "projects").mkdir()
     home = tmp_path / "wl"
     cli.snapshot(home)

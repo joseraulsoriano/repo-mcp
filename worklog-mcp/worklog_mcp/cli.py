@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import argparse
 import traceback
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
-from . import report, store
+from . import publish, report, store
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -32,6 +32,10 @@ def main(argv: list[str] | None = None) -> None:
     e.add_argument("--hours", type=float, default=None)
     e.add_argument("--day", default=None)
 
+    pb = sub.add_parser("publish", help="manda los días al panel de RTC Soluciones (/admin/bitacora)")
+    pb.add_argument("--since", default="-6d", help="por defecto: -6d (los últimos 7 días)")
+    pb.add_argument("--until", default=None, help="por defecto: hoy")
+
     sub.add_parser("snapshot", help="para hooks: escribe hoy.md, semana.md y semanas/<lunes>.md; nunca falla")
 
     args = ap.parse_args(argv)
@@ -41,6 +45,8 @@ def main(argv: list[str] | None = None) -> None:
     con = store.connect()
     if args.cmd == "sync":
         print(store.sync(con, report.parse_day(args.since, report.this_monday())))
+    elif args.cmd == "publish":
+        print(publish.publish(con, report.parse_day(args.since), report.parse_day(args.until)))
     elif args.cmd == "add":
         print(store.add_entry(con, args.kind, args.title, args.body, args.project, args.hours,
                               report.parse_day(args.day)))
@@ -74,6 +80,9 @@ def snapshot(home: Path | None = None) -> None:
         for path, md in files.items():
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(md, encoding="utf-8")
+        # Ayer también: una sesión que cruzó la medianoche cambia los dos días.
+        if publish.config(home):
+            publish.publish(con, today - timedelta(days=1), today, timeout=10, home=home)
     except Exception:
         home.mkdir(parents=True, exist_ok=True)
         with (home / "hook.log").open("a", encoding="utf-8") as log:

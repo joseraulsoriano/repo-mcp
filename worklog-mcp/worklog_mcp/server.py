@@ -7,7 +7,7 @@ from pathlib import Path
 
 from mcp.server.mcpserver import MCPServer
 
-from . import report, store
+from . import publish, report, store
 
 mcp = MCPServer(
     "worklog",
@@ -41,6 +41,18 @@ def worklog_sync(since: str | None = None) -> dict:
     start, _ = _range(since, None)
     with store.connect() as con:
         return store.sync(con, start)
+
+
+@mcp.tool()
+def worklog_publish(since: str | None = "-6d", until: str | None = None) -> dict:
+    """Manda los días [since, until] al panel de RTC Soluciones (/admin/bitacora).
+
+    Reenviar es seguro: cada día reemplaza al anterior. Necesita WORKLOG_PANEL_URL y
+    WORKLOG_PANEL_TOKEN, o ~/.worklog/panel.json con url y token.
+    """
+    start, end = _range(since or "-6d", until)
+    with store.connect() as con:
+        return publish.publish(con, start, end)
 
 
 @mcp.tool()
