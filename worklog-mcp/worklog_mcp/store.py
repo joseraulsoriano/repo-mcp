@@ -65,8 +65,9 @@ def from_iso(value: str) -> datetime:
     return datetime.fromisoformat(value).astimezone()
 
 
-def sync(con: sqlite3.Connection, since: date, projects_dir: Path = PROJECTS_DIR) -> dict:
+def sync(con: sqlite3.Connection, since: date, projects_dir: Path | None = None) -> dict:
     """Indexa transcripts modificados desde `since`; sólo re-parsea los que cambiaron."""
+    projects_dir = projects_dir or PROJECTS_DIR
     cutoff = datetime.combine(since, time.min).timestamp()
     seen = parsed = 0
     for path in projects_dir.rglob("*.jsonl"):

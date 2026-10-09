@@ -84,3 +84,21 @@ def test_parse_day_keywords():
     assert report.parse_day("-3d") == today - timedelta(days=3)
     assert report.parse_day("lunes").weekday() == 0
     assert report.parse_day("2026-10-05") == date(2026, 10, 5)
+
+
+def test_snapshot_writes_files_and_never_raises(tmp_path, monkeypatch):
+    from worklog_mcp import cli
+
+    monkeypatch.setattr(store, "PROJECTS_DIR", tmp_path / "projects")
+    (tmp_path / "projects").mkdir()
+    home = tmp_path / "wl"
+    cli.snapshot(home)
+    monday = report.this_monday().isoformat()
+    for name in ("hoy.md", "semana.md", f"semanas/{monday}.md"):
+        assert (home / name).read_text().startswith("# Bitácora de trabajo")
+    assert not (home / "hook.log").exists()
+
+    (home / "worklog.db").unlink()
+    (home / "worklog.db").mkdir()  # fuerza un error: la base no se puede abrir
+    cli.snapshot(home)
+    assert "Traceback" in (home / "hook.log").read_text()

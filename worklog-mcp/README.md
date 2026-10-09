@@ -50,6 +50,20 @@ Por defecto el rango va del lunes de esta semana a hoy.
 uv run worklog report --since lunes --detail completo --out ~/.worklog/semana.md
 uv run worklog add postura "No migrar a GraphQL" --body "REST cubre los casos" --project rtc --hours 1
 uv run worklog sync --since 2026-10-01
+uv run worklog snapshot   # escribe ~/.worklog/hoy.md, semana.md y semanas/<lunes>.md
+```
+
+## Automático al cerrar sesión
+
+`snapshot` está pensado para un hook `SessionEnd` en `~/.claude/settings.json`: tarda menos de
+un segundo, no imprime nada y, si algo falla, lo anota en `~/.worklog/hook.log` en lugar de
+romper el cierre de la sesión. `semanas/<lunes>.md` queda como archivo histórico de cada semana.
+
+```json
+"hooks": {
+  "SessionEnd": [{ "hooks": [{ "type": "command", "timeout": 30,
+    "command": "uv run --directory \"/ruta/a/mcp/worklog-mcp\" worklog snapshot" }] }]
+}
 ```
 
 ## Qué cuenta como entregable
