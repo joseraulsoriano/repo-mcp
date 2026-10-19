@@ -40,6 +40,8 @@ Luego, en cualquier sesión: *"dame mi bitácora desde el lunes"*, *"registra un
 | `worklog_entries` / `worklog_delete_entry` | Consultar o borrar entradas manuales. |
 | `worklog_search(query, since)` | Busca en instrucciones, entregables y entradas. |
 | `worklog_sync(since)` | Fuerza la reindexación. |
+| `worklog_jira_sync(since, until, dry_run)` | Avisa a Jira del trabajo hecho, sólo en tareas asignadas a ti (ver abajo). |
+| `worklog_jira_close(key, note)` | Cierra una tarea tuya con una nota. |
 
 Fechas aceptadas: `YYYY-MM-DD`, `hoy`, `ayer`, un día de la semana (`lunes` = el de esta semana) o `-7d`.
 Por defecto el rango va del lunes de esta semana a hoy.
@@ -79,6 +81,43 @@ herramienta `worklog_publish`. Reenviar es seguro: cada día reemplaza al anteri
 
 No viajan los comandos de shell ni las instrucciones completas (sólo la primera de cada sesión,
 recortada a 300 caracteres).
+
+## Jira: avisar de tu trabajo, sólo en tareas tuyas
+
+`worklog jira` (y la herramienta `worklog_jira_sync`) cruza las sesiones con Jira y avisa del
+trabajo hecho. Regla **«sólo sí»**: una sesión se vincula a una tarea únicamente si
+
+1. su clave (`QYCA-15`) aparece donde hay intención de trabajarla: la **rama**, un **commit hecho
+   en la sesión** o la **primera instrucción** de la sesión (una mención de pasada no cuenta), y
+2. Jira confirma que la tarea **existe** y su responsable **eres tú**.
+
+Si no se cumple, no se toca nada: la tarea sale en `omitidas` con el motivo («no está asignada a
+ti», «no existe») y la sesión en `sin_tarea`, con sus horas, para que se vea qué trabajo no está en
+Jira (por ejemplo, la web de otro sistema que nadie dio de alta).
+
+Con cada tarea vinculada:
+
+- **Por hacer → En curso** al detectar trabajo. Nunca reabre una tarea terminada.
+- **→ Listo** sólo con una señal explícita en una instrucción o en un commit de la sesión:
+  «cierra QYCA-15», «closes QYCA-15», «QYCA-15 listo». O a mano: `worklog_jira_close`.
+- **Un comentario por sesión** con fecha, horas, entregables y número de archivos; si la sesión
+  sigue, se actualiza el mismo comentario.
+
+Los commits de `git log` no cuentan por sí solos: en repos compartidos traen los de otras personas.
+
+```bash
+uv run worklog jira --configure          # URL, correo y API token; los prueba y guarda el token en el Llavero
+uv run worklog jira --dry-run            # qué haría con ayer y hoy, sin tocar Jira
+uv run worklog jira --since lunes        # lo hace
+uv run worklog jira --close QYCA-16 --note "Entregado al cliente"
+```
+
+No uses `security add-generic-password … -w` a mano: su aviso recorta la entrada a 128 caracteres
+y los API tokens de Atlassian son más largos, así que se guarda roto y Jira responde 401.
+
+Con eso configurado, `snapshot` (hook `SessionEnd`) sincroniza ayer y hoy al cerrar cada sesión y
+deja el resumen en `~/.worklog/jira.md`. A Jira viajan el título de la sesión, sus entregables y el
+número de archivos; nunca los comandos ni las instrucciones completas.
 
 ## Automático al cerrar sesión
 

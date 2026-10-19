@@ -7,7 +7,7 @@ from pathlib import Path
 
 from mcp.server.mcpserver import MCPServer
 
-from . import publish, report, store
+from . import jira, publish, report, store
 
 mcp = MCPServer(
     "worklog",
@@ -16,6 +16,8 @@ mcp = MCPServer(
         "Usa worklog_report para resúmenes por rango (por defecto, desde el lunes de esta semana), "
         "worklog_session para el detalle de una sesión y worklog_add_entry para dejar registro de "
         "revisiones, análisis, posturas o decisiones que no quedan en el código. "
+        "worklog_jira_sync avisa a Jira del trabajo hecho, sólo en tareas asignadas al usuario; "
+        "worklog_jira_close cierra una cuando dice que la terminó. "
         "Fechas: YYYY-MM-DD, 'hoy', 'ayer', un día de la semana ('lunes') o '-7d'."
     ),
 )
@@ -53,6 +55,26 @@ def worklog_publish(since: str | None = "-6d", until: str | None = None) -> dict
     start, end = _range(since or "-6d", until)
     with store.connect() as con:
         return publish.publish(con, start, end)
+
+
+@mcp.tool()
+def worklog_jira_sync(since: str | None = "ayer", until: str | None = None, dry_run: bool = False) -> dict:
+    """Avisa a Jira del trabajo de [since, until], sólo en tareas que existen y están asignadas a ti.
+
+    Vincula una sesión a una tarea si su clave (QYCA-15) está en la rama, en un commit de la sesión
+    o en su primera instrucción. Pasa «Por hacer» → «En curso», cierra sólo con «cierra QYCA-15» o
+    «QYCA-15 listo», y deja un comentario por sesión. Devuelve las vinculadas, las omitidas con su
+    motivo y el trabajo `sin_tarea`. dry_run=True muestra lo que haría sin tocar Jira.
+    """
+    start, end = _range(since or "ayer", until)
+    with store.connect() as con:
+        return jira.sync(con, start, end, dry_run)
+
+
+@mcp.tool()
+def worklog_jira_close(key: str, note: str = "") -> dict:
+    """Marca como terminada una tarea de Jira asignada a ti, con una nota opcional como comentario."""
+    return jira.close(key, note)
 
 
 @mcp.tool()
