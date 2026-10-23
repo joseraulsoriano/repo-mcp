@@ -77,10 +77,14 @@ class FakeJira:
         if rest == "/transitions" and method == "GET":
             return 200, {"transitions": [
                 {"id": "11", "to": {"name": "Por hacer", "statusCategory": {"key": "new"}}},
+                # Como en el tablero MKT de Basil: el bloqueo va primero y también es «En curso».
+                {"id": "15", "to": {"name": "Bloqueado", "statusCategory": {"key": "indeterminate"}}},
+                {"id": "16", "to": {"name": "En revisión", "statusCategory": {"key": "indeterminate"}}},
                 {"id": "21", "to": {"name": "En curso", "statusCategory": {"key": "indeterminate"}}},
                 {"id": "31", "to": {"name": "Listo", "statusCategory": {"key": "done"}}}]}
         if rest == "/transitions":
-            it["cat"] = {"11": "new", "21": "indeterminate", "31": "done"}[body["transition"]["id"]]
+            it["cat"] = {"11": "new", "15": "indeterminate", "16": "indeterminate", "21": "indeterminate", "31": "done"}[body["transition"]["id"]]
+            it["moved_to"] = body["transition"]["id"]
             return 204, None
         if rest == "/comment":
             it.setdefault("comments", []).append(body)
@@ -147,6 +151,25 @@ def test_resync_updates_the_same_comment(tmp_path, monkeypatch, fake):
     assert out["vinculadas"][0]["comentario"] == "actualizado"
     assert len(fake.issues["QYCA-1"]["comments"]) == 1
     assert ("PUT", "/rest/api/3/issue/QYCA-1/comment/1") in fake.calls
+
+
+def test_never_moves_to_blocked_nor_overrides_a_manual_move(tmp_path, monkeypatch, fake):
+    _sesion(tmp_path, "s1", ["Avanza QYCA-1"])
+    con = _con(tmp_path, monkeypatch)
+    jira.sync(con, DAY, DAY, jira=fake.client)
+    assert fake.issues["QYCA-1"]["moved_to"] == "21"  # «En curso», ni «Bloqueado» ni «En revisión»
+    fake.issues["QYCA-1"]["cat"] = "new"  # alguien la regresa a «Por hacer» a mano
+    out = jira.sync(con, DAY, DAY, jira=fake.client)
+    assert out["vinculadas"][0]["estado"] == "sin cambio"
+    assert fake.issues["QYCA-1"]["cat"] == "new"
+
+
+def test_comment_only_sync_leaves_status_alone(tmp_path, monkeypatch, fake):
+    _sesion(tmp_path, "s1", ["Avanza QYCA-1", "cierra QYCA-1"])
+    out = jira.sync(_con(tmp_path, monkeypatch), DAY, DAY, jira=fake.client, move=False)
+    assert out["vinculadas"][0]["estado"] == "sin cambio" and out["vinculadas"][0]["comentario"] == "creado"
+    assert fake.issues["QYCA-1"]["cat"] == "new"
+    assert not [c for c in fake.calls if c[1].endswith("/transitions") and c[0] == "POST"]
 
 
 def test_dry_run_writes_nothing(tmp_path, monkeypatch, fake):

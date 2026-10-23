@@ -7,9 +7,12 @@ instrucción no cuenta, y el trabajo sin tarea (la web de otro sistema, por ejem
 nada: sale en `sin_tarea` para que se vea qué no quedó en Jira.
 
 Qué hace con cada tarea vinculada:
-- «Por hacer» → «En curso» al detectar trabajo. Nunca reabre una tarea terminada.
+- «Por hacer» → «En curso» al detectar trabajo, una sola vez por sesión: si alguien la regresa a
+  mano, se respeta. Nunca a un estado de bloqueo («Bloqueado», «Blocked», «En espera»), aunque el
+  flujo lo ponga en la categoría «En curso». Nunca reabre una tarea terminada.
 - → «Listo» sólo con una señal explícita en una instrucción o un commit: «cierra QYCA-15»,
   «closes QYCA-15», «QYCA-15 listo».
+- El hook `SessionEnd` (`worklog snapshot`) sólo comenta: no cambia estados.
 - Un comentario por sesión con fecha, horas, entregables y archivos; si la sesión sigue, el mismo
   comentario se actualiza en lugar de duplicarse.
 
@@ -44,6 +47,11 @@ CLOSE = re.compile(
     rf"|({_KEYS})\s*(?:listo|lista|terminad[ao]|done|cerrad[ao])\b",
     re.IGNORECASE,
 )
+# Estados que el flujo puede poner en «En curso» pero que no son empezar a trabajar: no se eligen
+# nunca. Si hay uno que sí lo dice («En curso», «In Progress»), ése va primero.
+NOT_WORKING = re.compile(r"bloque|block|imped|espera|hold|pausa|paused|revisi|review|aprobad|approv",
+                         re.IGNORECASE)
+WORKING = re.compile(r"en curso|en progreso|in progress|doing|trabajando", re.IGNORECASE)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS jira_comments (
@@ -175,12 +183,17 @@ class Jira:
         return self._call("GET", f"/rest/api/3/issue/{key}?fields=summary,status,assignee")
 
     def move(self, key: str, category: str) -> str | None:
-        """Aplica la primera transición que lleva a la categoría `indeterminate` o `done`."""
-        for t in (self._call("GET", f"/rest/api/3/issue/{key}/transitions") or {}).get("transitions", []):
-            if t["to"]["statusCategory"]["key"] == category:
-                self._call("POST", f"/rest/api/3/issue/{key}/transitions", {"transition": {"id": t["id"]}})
-                return t["to"]["name"]
-        return None
+        """Aplica una transición a la categoría `indeterminate` o `done`; en curso, nunca a un bloqueo."""
+        options = [t for t in (self._call("GET", f"/rest/api/3/issue/{key}/transitions") or {}).get(
+            "transitions", []) if t["to"]["statusCategory"]["key"] == category]
+        if category == "indeterminate":
+            options = sorted((t for t in options if not NOT_WORKING.search(t["to"]["name"])),
+                             key=lambda t: not WORKING.search(t["to"]["name"]))
+        if not options:
+            return None
+        t = options[0]
+        self._call("POST", f"/rest/api/3/issue/{key}/transitions", {"transition": {"id": t["id"]}})
+        return t["to"]["name"]
 
     def comment(self, key: str, lines: list[str], comment_id: str | None = None) -> str:
         body = {"body": {"type": "doc", "version": 1, "content": [
@@ -230,8 +243,12 @@ def _advance(jira: Jira, key: str, issue: dict, closing: bool, dry_run: bool) ->
 
 
 def sync(con, start: date, end: date, dry_run: bool = False, home: Path | None = None,
-         jira: Jira | None = None, timeout: float = 15.0) -> dict:
-    """Vincula las sesiones de [start, end] con sus tareas y avisa a Jira."""
+         jira: Jira | None = None, timeout: float = 15.0, move: bool = True) -> dict:
+    """Vincula las sesiones de [start, end] con sus tareas y avisa a Jira.
+
+    move=False sólo comenta. Con move=True, una tarea se mueve únicamente la primera vez que se
+    avisa de esa sesión: las siguientes sincronizaciones no pisan lo que alguien movió a mano.
+    """
     if jira is None:
         cfg = config(home)
         if not cfg:
@@ -255,9 +272,9 @@ def sync(con, start: date, end: date, dry_run: bool = False, home: Path | None =
                         skipped[key] = why
                         continue
                     ok_keys.append(key)
-                    change = _advance(jira, key, issue, key in closed, dry_run)
                     row = con.execute("SELECT comment_id FROM jira_comments WHERE session_id=? AND issue=?",
                                       (sess["session_id"], key)).fetchone()
+                    change = _advance(jira, key, issue, key in closed, dry_run) if move and not row else None
                     if not dry_run:
                         cid = jira.comment(key, _summary(day["day"], project, sess), row and row["comment_id"])
                         con.execute("INSERT OR REPLACE INTO jira_comments VALUES (?,?,?)",

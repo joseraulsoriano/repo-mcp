@@ -98,7 +98,8 @@ def snapshot(home: Path | None = None) -> None:
         if publish.config(home):
             publish.publish(con, today - timedelta(days=1), today, timeout=10, home=home)
         if jira.config(home):
-            out = jira.sync(con, today - timedelta(days=1), today, home=home, timeout=5)
+            # Sólo comenta: un cierre de sesión cualquiera no debe pisar el estado que alguien puso a mano.
+            out = jira.sync(con, today - timedelta(days=1), today, home=home, timeout=5, move=False)
             (home / "jira.md").write_text(_jira_md(out), encoding="utf-8")
     except Exception:
         home.mkdir(parents=True, exist_ok=True)
