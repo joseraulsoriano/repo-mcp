@@ -11,7 +11,8 @@ from pathlib import Path
 
 from .ingest import parse_file
 
-PROJECTS_DIR = Path(os.environ.get("WORKLOG_CLAUDE_PROJECTS", Path.home() / ".claude" / "projects"))
+DEFAULT_PROJECTS_DIR = Path.home() / ".claude" / "projects"
+PROJECTS_DIR = Path(os.environ.get("WORKLOG_CLAUDE_PROJECTS", DEFAULT_PROJECTS_DIR))
 DATA_DIR = Path(os.environ.get("WORKLOG_HOME", Path.home() / ".worklog"))
 # Huecos de actividad mayores a esto no cuentan como tiempo trabajado.
 IDLE_MINUTES = int(os.environ.get("WORKLOG_IDLE_MINUTES", "15"))
@@ -65,12 +66,30 @@ def from_iso(value: str) -> datetime:
     return datetime.fromisoformat(value).astimezone()
 
 
+def projects_dirs() -> list[Path]:
+    """Carpetas de transcripts a indexar.
+
+    La de siempre más la de cada perfil alterno de Claude Code (`~/.claude-*/projects`, p. ej.
+    `~/.claude-emergencia`, que se abre con otro `CLAUDE_CONFIG_DIR`): sin esto, lo trabajado
+    desde un perfil alterno no sale en la bitácora. Si la carpeta se fijó a mano
+    (`WORKLOG_CLAUDE_PROJECTS` o una prueba), sólo esa.
+    """
+    if PROJECTS_DIR != DEFAULT_PROJECTS_DIR:
+        return [PROJECTS_DIR]
+    return [PROJECTS_DIR, *sorted(p for p in Path.home().glob(".claude-*/projects") if p.is_dir())]
+
+
+def _transcripts(dirs: list[Path]):
+    for directory in dirs:
+        yield from directory.rglob("*.jsonl")
+
+
 def sync(con: sqlite3.Connection, since: date, projects_dir: Path | None = None) -> dict:
     """Indexa transcripts modificados desde `since`; sólo re-parsea los que cambiaron."""
-    projects_dir = projects_dir or PROJECTS_DIR
+    dirs = [projects_dir] if projects_dir else projects_dirs()
     cutoff = datetime.combine(since, time.min).timestamp()
     seen = parsed = 0
-    for path in projects_dir.rglob("*.jsonl"):
+    for path in _transcripts(dirs):
         try:
             st = path.stat()
         except OSError:

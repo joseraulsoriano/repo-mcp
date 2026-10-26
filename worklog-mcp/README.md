@@ -9,7 +9,9 @@ Pensado como evidencia de trabajo: un "Jira personal" que se lee en dos minutos.
 
 ## Cómo funciona
 
-1. Lee los transcripts de `~/.claude/projects/**.jsonl` (incluidos los de subagentes).
+1. Lee los transcripts de `~/.claude/projects/**.jsonl` (incluidos los de subagentes) y los de cada
+   perfil alterno de Claude Code, `~/.claude-*/projects` (p. ej. `~/.claude-emergencia`). Con
+   `WORKLOG_CLAUDE_PROJECTS` se lee sólo esa carpeta.
 2. Los indexa en SQLite en `~/.worklog/worklog.db`. Sólo re-parsea los archivos que cambiaron.
 3. Cruza con `git log --all` de cada repo donde hubo sesiones.
 4. Genera Markdown por **día → proyecto → sesión**.

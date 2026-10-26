@@ -244,5 +244,5 @@ def render(data: dict, detail: str = "breve") -> str:
     out += ["---",
             f"_Horas activas = suma de intervalos entre eventos de la sesión separados por ≤ {store.IDLE_MINUTES} min,"
             " sin contar dos veces sesiones en paralelo. Incluye el tiempo en que el agente trabajó"
-            " (sesiones `bg`). Fuente: `~/.claude/projects` + `git log --all` de cada repo._"]
+            " (sesiones `bg`). Fuente: `~/.claude/projects` (y los perfiles `~/.claude-*`) + `git log --all` de cada repo._"]
     return "\n".join(out)

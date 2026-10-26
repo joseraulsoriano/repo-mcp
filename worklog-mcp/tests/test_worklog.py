@@ -106,3 +106,19 @@ def test_snapshot_writes_files_and_never_raises(tmp_path, monkeypatch):
     (home / "worklog.db").mkdir()  # fuerza un error: la base no se puede abrir
     cli.snapshot(home)
     assert "Traceback" in (home / "hook.log").read_text()
+
+
+def test_lee_tambien_los_perfiles_alternos(tmp_path, monkeypatch):
+    """Lo trabajado con otro CLAUDE_CONFIG_DIR (~/.claude-emergencia) también cuenta."""
+    principal = tmp_path / ".claude" / "projects"
+    alterno = tmp_path / ".claude-emergencia" / "projects"
+    for carpeta in (principal, alterno, tmp_path / ".claude-vacio"):
+        carpeta.mkdir(parents=True)
+    monkeypatch.setattr(store.Path, "home", lambda: tmp_path)
+    monkeypatch.setattr(store, "DEFAULT_PROJECTS_DIR", principal)
+    monkeypatch.setattr(store, "PROJECTS_DIR", principal)
+    assert store.projects_dirs() == [principal, alterno]
+
+    # Con la carpeta fijada a mano (variable o prueba) se lee sólo esa.
+    monkeypatch.setattr(store, "PROJECTS_DIR", tmp_path / "otra")
+    assert store.projects_dirs() == [tmp_path / "otra"]
