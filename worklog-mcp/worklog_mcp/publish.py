@@ -25,7 +25,7 @@ import urllib.request
 from datetime import date
 from pathlib import Path
 
-from . import report, store
+from . import ciclo, report, store
 
 ENDPOINT = "/api/bitacora/dias"
 # Días por petición: cada uno pesa pocos KB, 30 dejan el cuerpo muy por debajo del límite.
@@ -64,8 +64,25 @@ def _iso(dt) -> str:
     return store._iso(dt) if dt else ""
 
 
-def build_days(data: dict) -> list[dict]:
-    """`report.collect` → el contrato de `src/lib/bitacora.ts` (DiaBitacora)."""
+# Parecen claves de Jira pero no lo son: no se le pregunta a Jira por «UTF-8» ni por «SHA-256».
+NO_TICKET = {"UTF", "SHA", "ISO", "BUG", "HTTP", "TLS", "RFC", "CVE", "PBKDF", "AES", "MD", "ES", "PR", "COT"}
+
+
+def claves_de(data: dict) -> set[str]:
+    """Los tickets (KAN-139, HAC-12…) que mencionan los commits del rango."""
+    from .jira import keys_in  # jira importa publish: aquí evita el ciclo
+    return {k for d in data["days"] for c in d["commits"] for k in keys_in(c["subject"])
+            if k.split("-")[0] not in NO_TICKET}
+
+
+def build_days(data: dict, tickets: dict[str, dict] | None = None) -> list[dict]:
+    """`report.collect` → el contrato de `src/lib/bitacora.ts` (DiaBitacora).
+
+    `tickets` es {clave: {creado, epica}} (ciclo.fechas_tickets): viaja con cada commit que lo menciona,
+    para que el panel sepa cuándo se pidió el cambio sin consultar Jira.
+    """
+    from .jira import keys_in
+    tickets = tickets or {}
     days = []
     for day in data["days"]:
         projects = []
@@ -97,7 +114,13 @@ def build_days(data: dict) -> list[dict]:
             "horas": round(day["hours"], 4),
             "proyectos": projects,
             "commits": [{"sha": c["sha"], "ts": _iso(c["ts"]), "proyecto": c["project"],
-                         "asunto": report._short(c["subject"], 300)} for c in day["commits"]],
+                         "asunto": report._short(c["subject"], 300),
+                         "tickets": [{"clave": k, "creado": tickets[k]["creado"], "epica": tickets[k]["epica"]}
+                                     for k in sorted(keys_in(c["subject"])) if k in tickets]}
+                        for c in day["commits"]],
+            "publicaciones": [{"proyecto": p["proyecto"], "tag": p["tag"], "ts": _iso(p["ts"]),
+                               "shas": p["shas"]} for p in day.get("publicaciones", [])],
+            "bugs": day.get("bugs", []),
             "entradas": [{"tipo": e["kind"], "titulo": e["title"], "cuerpo": e["body"] or "",
                           "proyecto": e["project"] or "", "horas": e["hours"]} for e in day["entries"]],
         })
@@ -125,6 +148,12 @@ def _post(url: str, token: str, body: dict, timeout: float) -> dict:
                            + (f" ({problems})" if problems else "")) from None
 
 
+def fechas(con, data: dict, home: Path | None = None) -> dict[str, dict]:
+    """Fecha de creación de cada ticket del rango, preguntada al sitio de Jira de su prefijo."""
+    from .jira import sitios
+    return ciclo.fechas_tickets(con, claves_de(data), sitios(home))
+
+
 def publish(con, start: date, end: date, timeout: float = 20.0, home: Path | None = None) -> dict:
     """Sincroniza, arma los días [start, end] y los manda. Lanza si falta configuración o el panel falla."""
     cfg = config(home)
@@ -133,7 +162,8 @@ def publish(con, start: date, end: date, timeout: float = 20.0, home: Path | Non
                            "o ~/.worklog/panel.json con url y token.")
     url, token = cfg
     store.sync(con, start)
-    days = build_days(report.collect(con, start, end))
+    data = report.collect(con, start, end)
+    days = build_days(data, fechas(con, data, home))
     sent = 0
     for i in range(0, len(days), LOTE):
         _post(url, token, {"origen": "worklog-mcp", "dias": days[i:i + LOTE]}, timeout)

@@ -7,7 +7,7 @@ from pathlib import Path
 
 from mcp.server.mcpserver import MCPServer
 
-from . import jira, publish, report, store
+from . import ciclo, jira, publish, report, store
 
 mcp = MCPServer(
     "worklog",
@@ -153,6 +153,27 @@ def worklog_add_entry(kind: str, title: str, body: str = "", project: str = "", 
     con = store.connect()
     entry_id = store.add_entry(con, kind, title, body, project, hours, report.parse_day(day), session_id, tags)
     return {"id": entry_id, "ok": True}
+
+
+@mcp.tool()
+def worklog_bug(title: str, project: str, ticket: str = "", body: str = "") -> dict:
+    """Anota un bug al encontrarlo, en cualquier proyecto (no sólo el repo actual).
+
+    project: el nombre del repo como lo ve la bitácora (p. ej. rtcsolutions-web, gestion-app-web-hack).
+    ticket: la clave de Jira si la hay (KAN-139). Se cierra solo cuando llega un commit `fix(...)` del
+    mismo proyecto que mencione ese ticket o `BUG-<id>` (el id que devuelve esta herramienta): pon uno
+    de los dos en el asunto del arreglo. El panel mide cuánto tardó de anotado a arreglado.
+    """
+    con = store.connect()
+    bug_id = ciclo.abrir_bug(con, title, project, ticket, body)
+    return {"id": bug_id, "ok": True, "en_el_fix": f"BUG-{bug_id}" + (f" o {ticket.upper()}" if ticket else "")}
+
+
+@mcp.tool()
+def worklog_bugs(estado: str = "abiertos") -> list[dict]:
+    """Lista los bugs anotados: estado = abiertos | cerrados | todos."""
+    con = store.connect()
+    return ciclo.listar_bugs(con, estado)
 
 
 @mcp.tool()

@@ -166,8 +166,8 @@ def add_entry(con, kind: str, title: str, body: str = "", project: str = "", hou
 
 # --- git -------------------------------------------------------------------
 
-def git_commits(cwds: list[str], start: date, end: date) -> list[dict]:
-    """Commits de todas las ramas en los repos donde hubo sesiones, sin duplicados."""
+def repo_roots(cwds: list[str]) -> dict[str, str]:
+    """{git common dir: un cwd dentro de ese repo}: un repo con varios worktrees cuenta una vez."""
     roots: dict[str, str] = {}
     for cwd in cwds:
         if not cwd or not Path(cwd).is_dir():
@@ -181,6 +181,12 @@ def git_commits(cwds: list[str], start: date, end: date) -> list[dict]:
             continue
         if out.returncode == 0:
             roots.setdefault(out.stdout.strip(), cwd)
+    return roots
+
+
+def git_commits(cwds: list[str], start: date, end: date, roots: dict[str, str] | None = None) -> list[dict]:
+    """Commits de todas las ramas en los repos donde hubo sesiones, sin duplicados."""
+    roots = roots if roots is not None else repo_roots(cwds)
     commits: dict[str, dict] = {}
     for common, cwd in roots.items():
         try:

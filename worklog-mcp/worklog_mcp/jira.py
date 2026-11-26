@@ -34,7 +34,7 @@ import re
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import date
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 from . import publish, report, store
@@ -66,6 +66,28 @@ def site(url: str) -> str:
         url = "https://" + url
     parts = urllib.parse.urlsplit(url)
     return f"{parts.scheme}://{parts.netloc}" if parts.netloc else ""
+
+
+def sitios(home: Path | None = None) -> list[tuple[set[str], "Jira"]]:
+    """Los sitios de Jira por prefijo, de `~/.worklog/jira-sitios.json`.
+
+    Cada ticket se le pregunta sólo al sitio que declara su prefijo: dos sitios pueden tener un
+    CLIEN-1 distinto, y la fecha de uno no sirve para el otro. Formato:
+    `[{"url": "...", "email": "...", "prefijos": ["KAN", "HAC"], "llavero": "worklog-jira-rtc"}]`.
+    El token va en el Llavero con ese servicio (nunca en el archivo).
+    """
+    try:
+        data = json.loads(((home or store.DATA_DIR) / "jira-sitios.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    salida = []
+    for s in data if isinstance(data, list) else []:
+        url, email = str(s.get("url", "")).strip(), str(s.get("email", "")).strip()
+        prefijos = {str(p).strip().upper() for p in s.get("prefijos", []) if str(p).strip()}
+        token = publish.keychain_token(str(s.get("llavero", "")).strip()) if s.get("llavero") else ""
+        if url and email and token and prefijos:
+            salida.append((prefijos, Jira(site(url), email, token)))
+    return salida
 
 
 def config(home: Path | None = None) -> tuple[str, str, str] | None:
@@ -181,6 +203,23 @@ class Jira:
 
     def issue(self, key: str) -> dict | None:
         return self._call("GET", f"/rest/api/3/issue/{key}?fields=summary,status,assignee")
+
+    def ficha(self, key: str) -> dict | None:
+        """{creado: ISO UTC, epica: bool} del ticket, o None si no existe en este sitio de Jira."""
+        res = self._call("GET", f"/rest/api/3/issue/{key}?fields=created,issuetype")
+        campos = (res or {}).get("fields") or {}
+        if not campos.get("created"):
+            return None
+        tipo = campos.get("issuetype") or {}
+        epica = tipo.get("hierarchyLevel") == 1 or str(tipo.get("name", "")).lower() in ("epic", "épica", "epica")
+        return {"creado": self._utc(campos["created"]), "epica": epica}
+
+    @staticmethod
+    def _utc(created: str) -> str:
+        # Jira manda `-0600`; fromisoformat de 3.10 quiere `-06:00`.
+        if len(created) > 5 and created[-5] in "+-" and created[-3] != ":":
+            created = created[:-2] + ":" + created[-2:]
+        return datetime.fromisoformat(created).astimezone(timezone.utc).isoformat(timespec="seconds")
 
     def move(self, key: str, category: str) -> str | None:
         """Aplica una transición a la categoría `indeterminate` o `done`; en curso, nunca a un bloqueo."""

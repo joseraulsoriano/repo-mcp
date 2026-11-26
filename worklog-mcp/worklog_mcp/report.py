@@ -7,7 +7,7 @@ from collections import defaultdict
 from datetime import date, timedelta
 from pathlib import Path
 
-from . import store
+from . import ciclo, store
 
 DAYS_ES = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
 MONTHS_ES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"]
@@ -137,13 +137,23 @@ def collect(con, start: date, end: date, project: str | None = None) -> dict:
                      "entries": entries, "commits": []})
         d += timedelta(days=1)
 
-    commits = store.git_commits(sorted({m["cwd"] for m in meta.values()}), start, end)
+    roots = store.repo_roots(sorted({m["cwd"] for m in meta.values()}))
+    commits = store.git_commits([], start, end, roots=roots)
     if project:
         commits = [c for c in commits if c["project"].lower() == project.lower()]
     for c in commits:
         idx = (c["ts"].date() - start).days
         if 0 <= idx < len(days):
             days[idx]["commits"].append(c)
+    # Cuánto tardamos (ciclo.py): en qué tag salió cada commit y qué bugs se abrieron o cerraron.
+    ciclo.cerrar_bugs(con, commits)
+    pubs = ciclo.publicaciones(roots, start, end, store.project_of)
+    if project:
+        pubs = [p for p in pubs if p["proyecto"].lower() == project.lower()]
+    for x in days:
+        x["publicaciones"] = [p for p in pubs if p["ts"].date() == x["day"]]
+        x["bugs"] = [b for b in ciclo.bugs_del_dia(con, x["day"])
+                     if not project or b["proyecto"].lower() == project.lower()]
 
     worked = [m for sid, m in meta.items() if sid in totals_sessions]
     return {
